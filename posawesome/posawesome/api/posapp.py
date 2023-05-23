@@ -125,36 +125,39 @@ def get_items(pos_profile, price_list=None):
     condition = ""
     condition += get_item_group_condition(pos_profile.get("name"))
     if not pos_profile.get("posa_show_template_items"):
-        condition += " AND has_variants = 0"
+        condition += " AND i.has_variants = 0"
 
     result = []
 
     items_data = frappe.db.sql(
         """
         SELECT
-            name AS item_code,
-            item_name,
-            description,
-            stock_uom,
-            image,
-            is_stock_item,
-            has_variants,
-            variant_of,
-            item_group,
-            idx as idx,
-            has_batch_no,
-            has_serial_no,
-            max_discount,
-            brand
+            i.name AS item_code,
+            i.item_name,
+            i.description,
+            i.stock_uom,
+            i.image,
+            i.is_stock_item,
+            i.has_variants,
+            i.variant_of,
+            i.item_group,
+            i.idx as idx,
+            i.has_batch_no,
+            i.has_serial_no,
+            i.max_discount,
+            i.brand,
+            c.attribute_value as size_attr
         FROM
-            `tabItem`
+            `tabItem` i, `tabItem Variant Attribute` c
         WHERE
-            disabled = 0
-                AND is_sales_item = 1
-                AND is_fixed_asset = 0
+                i.disabled = 0
+                AND i.is_sales_item = 1
+                AND i.is_fixed_asset = 0
+                AND i.item_code = c.parent
+                AND c.attribute like '%المقاس%'
                 {0}
         ORDER BY
-            name asc
+            i.item_name asc, c.attribute_value asc
             """.format(
             condition
         ),
@@ -262,14 +265,10 @@ def get_root_of(doctype):
 
 @frappe.whitelist()
 def get_items_groups():
-    return frappe.db.sql(
-        """
-        select name 
-        from `tabItem Group`
-        where is_group = 0
-        order by name
-        LIMIT 0, 200 """,
-        as_dict=1,
+    return frappe.db.get_list(
+        'Item Group',
+        filters={'parent_item_group':["descendants of","Products - منتجات"], "is_group": 0},
+        order_by='name asc'
     )
 
 
@@ -805,11 +804,9 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None):
     item = json.loads(item)
     item_code = item.get("item_code")
     if warehouse and item.get("has_batch_no") and not item.get("batch_no"):
-        batch_no = get_batch_no(
+        item["batch_no"] = get_batch_no(
             item_code, warehouse, item.get("qty"), False, item.get("d")
         )
-        if batch_no:
-            item["batch_no"] = batch_no.get("batch_no")
     item["selling_price_list"] = price_list
     max_discount = frappe.get_value("Item", item_code, "max_discount")
     res = get_item_details(
@@ -1519,7 +1516,7 @@ def set_payment_schedule(doc):
                 base_payment_amount=base_grand_total,
             )
             doc.append("payment_schedule", data)
-
+    frappe.msgprint(str(doc.outstanding_amount))
     for d in doc.get("payment_schedule"):
         if d.invoice_portion:
             d.payment_amount = flt(
@@ -1533,3 +1530,12 @@ def set_payment_schedule(doc):
             d.base_payment_amount = flt(
                 d.payment_amount * doc.get("conversion_rate"), d.precision("base_payment_amount")
             )
+
+
+@frappe.whitelist()
+def get_items_sizes():
+    cond = "parent='المقاس'"
+    result = frappe.db.sql(""" select distinct attribute_value from `tabItem Attribute Value`
+			where {condition} ORDER BY attribute_value ASC limit 0, 200"""
+		.format(condition = cond), as_dict = 1)
+    return result

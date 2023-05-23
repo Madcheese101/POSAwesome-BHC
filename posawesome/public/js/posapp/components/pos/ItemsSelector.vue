@@ -2,7 +2,8 @@
   <div>
     <v-card
       class="selection mx-auto grey lighten-5"
-      style="max-height: 75vh; height: 75vh"
+      style="max-height: 85vh; height: 75vh"
+      elevation="2"
     >
       <v-progress-linear
         :active="loading"
@@ -11,8 +12,9 @@
         top
         color="info"
       ></v-progress-linear>
-      <v-row class="items px-2 py-1">
-        <v-col class="pb-0 mb-2">
+      <v-row align="center" justify="center" class="px-2 py-1">
+        <!-- Search Bar -->
+        <v-col cols="6" class="pb-0 mb-2 mt-2">
           <v-text-field
             dense
             clearable
@@ -29,6 +31,16 @@
             ref="debounce_search"
           ></v-text-field>
         </v-col>
+        <v-col class="mt-2">
+            <v-select :items="items_group" :label="frappe._('Items Group')" dense outlined hide-details v-model="item_group">
+            </v-select>
+        </v-col>
+        <v-col class="mt-2">
+            <v-select :items="items_size" :label="frappe._('Items Size')" dense outlined hide-details v-model="item_size">
+            </v-select>
+        </v-col>
+      </v-row>
+      <v-row class="items px-2 py-1">
         <v-col cols="3" class="pb-0 mb-2" v-if="pos_profile.posa_input_qty">
           <v-text-field
             dense
@@ -118,16 +130,6 @@
     </v-card>
     <v-card class="cards mb-0 mt-3 pa-2 grey lighten-5">
       <v-row no-gutters align="center" justify="center">
-        <v-col cols="12">
-          <v-select
-            :items="items_group"
-            :label="frappe._('Items Group')"
-            dense
-            outlined
-            hide-details
-            v-model="item_group"
-          ></v-select>
-        </v-col>
         <v-col cols="3" class="mt-1">
           <v-btn-toggle
             v-model="items_view"
@@ -166,8 +168,10 @@ export default {
     flags: {},
     items_view: 'list',
     item_group: 'ALL',
+    item_size: 'ALL',
     loading: false,
     items_group: ['ALL'],
+    items_size: ['ALL'],
     items: [],
     search: '',
     first_search: '',
@@ -222,6 +226,7 @@ export default {
         },
         callback: function (r) {
           if (r.message) {
+            // console.log();
             vm.items = r.message;
             evntBus.$emit('set_all_items', vm.items);
             vm.loading = false;
@@ -259,6 +264,24 @@ export default {
           },
         });
       }
+    },    
+    get_items_sizes() {
+      if (!this.pos_profile) {
+        console.log('No POS Profile');
+        return;
+      }
+      const vm = this;
+      frappe.call({
+        method: 'posawesome.posawesome.api.posapp.get_items_sizes',
+        args: {},
+        callback: function (r) {
+          if (r.message) {
+              r.message.forEach((element) => {
+              vm.items_size.push(element.attribute_value);
+            });
+          }
+        },
+        });
     },
     getItmesHeaders() {
       const items_headers = [
@@ -431,13 +454,19 @@ export default {
       this.search = this.get_search(this.first_search);
       let filtred_list = [];
       let filtred_group_list = [];
-      if (this.item_group != 'ALL') {
-        filtred_group_list = this.items.filter((item) =>
-          item.item_group.toLowerCase().includes(this.item_group.toLowerCase())
-        );
-      } else {
-        filtred_group_list = this.items;
+      let gr = "";
+      let sz = "";
+      if(this.item_group != 'ALL'){
+        gr = this.item_group.toLowerCase();
       }
+      if(this.item_size != 'ALL'){
+        sz = this.item_size.toLowerCase();
+      }
+      
+      filtred_group_list = this.items.filter((item) =>
+          item.item_group.toLowerCase().includes(gr) && item.size_attr.toLowerCase().includes(sz)
+        );
+
       if (!this.search || this.search.length < 3) {
         if (
           this.pos_profile.posa_show_template_items &&
@@ -513,6 +542,7 @@ export default {
       this.pos_profile = data.pos_profile;
       this.get_items();
       this.get_items_groups();
+      this.get_items_sizes();
       this.float_precision =
         frappe.defaults.get_default('float_precision') || 2;
       this.currency_precision =
