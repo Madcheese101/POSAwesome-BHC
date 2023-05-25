@@ -27,16 +27,18 @@
             hide-details
             v-model="debounce_search"
             @keydown.esc="esc_event"
-            @keydown.enter="enter_event"
+            @keydown.enter="get_items"
             ref="debounce_search"
           ></v-text-field>
         </v-col>
         <v-col class="mt-2">
-            <v-select :items="items_group" :label="frappe._('Items Group')" dense outlined hide-details v-model="item_group">
+            <v-select :items="items_group" :label="frappe._('Items Group')" dense outlined 
+            hide-details v-model="item_group" v-on:change="get_items">
             </v-select>
         </v-col>
         <v-col class="mt-2">
-            <v-select :items="items_size" :label="frappe._('Items Size')" dense outlined hide-details v-model="item_size">
+            <v-select :items="items_size" :label="frappe._('Items Size')" dense outlined 
+            hide-details v-model="item_size" v-on:change="get_items">
             </v-select>
         </v-col>
       </v-row>
@@ -51,7 +53,7 @@
             hide-details
             v-model.number="qty"
             type="number"
-            @keydown.enter="enter_event"
+            @keydown.enter="get_items"
             @keydown.esc="esc_event"
           ></v-text-field>
         </v-col>
@@ -213,28 +215,36 @@ export default {
       }
       const vm = this;
       this.loading = true;
-      if (vm.pos_profile.posa_local_storage && localStorage.items_storage) {
-        vm.items = JSON.parse(localStorage.getItem('items_storage'));
-        evntBus.$emit('set_all_items', vm.items);
-        vm.loading = false;
+      this.search = this.get_search(this.first_search);
+      let gr = "";
+      let sz = "";
+      let sr = "";
+      if(vm.item_group != 'ALL'){
+        gr = vm.item_group.toLowerCase();
       }
+      if(vm.item_size != 'ALL'){
+        sz = vm.item_size;
+      }
+      if(vm.search){
+        sr = vm.search;
+      } 
       frappe.call({
-        method: 'posawesome.posawesome.api.posapp.get_items',
+        method: 'posawesome.posawesome.api.revised.get_items',
         args: {
           pos_profile: vm.pos_profile,
           price_list: vm.customer_price_list,
+          item_size:sz,
+          item_group:gr,
+          search_value:sr,
         },
         callback: function (r) {
           if (r.message) {
-            // console.log();
             vm.items = r.message;
             evntBus.$emit('set_all_items', vm.items);
             vm.loading = false;
-            console.info('loadItmes');
-            if (vm.pos_profile.posa_local_storage) {
-              localStorage.setItem('items_storage', '');
-              localStorage.setItem('items_storage', JSON.stringify(r.message));
-            }
+            console.info('Items Loaded');
+            vm.filtred_items = r.message;
+            vm.enter_event();
           }
         },
       });
@@ -319,27 +329,34 @@ export default {
       }
     },
     enter_event() {
+      let match = false;
+
       if (!this.filtred_items.length || !this.first_search) {
         return;
       }
+
       const qty = this.get_item_qty(this.first_search);
       const new_item = { ...this.filtred_items[0] };
       new_item.qty = flt(qty);
       new_item.item_barcode.forEach((element) => {
         if (this.search == element.barcode) {
           new_item.uom = element.posa_uom;
+          match = true;
         }
       });
       if (this.flags.serial_no) {
         new_item.to_set_serial_no = this.flags.serial_no;
       }
-      this.add_item(new_item);
-      this.search = null;
-      this.first_search = null;
-      this.debounce_search = null;
-      this.flags.serial_no = null;
-      this.qty = 1;
-      this.$refs.debounce_search.focus();
+
+      if(match){
+        this.add_item(new_item);
+        this.search = null;
+        this.first_search = null;
+        this.debounce_search = null;
+        this.flags.serial_no = null;
+        this.qty = 1;
+        this.$refs.debounce_search.focus();
+      }
     },
     get_item_qty(first_search) {
       let scal_qty = Math.abs(this.qty);
@@ -450,82 +467,6 @@ export default {
   },
 
   computed: {
-    filtred_items() {
-      this.search = this.get_search(this.first_search);
-      let filtred_list = [];
-      let filtred_group_list = [];
-      let gr = "";
-      let sz = "";
-      if(this.item_group != 'ALL'){
-        gr = this.item_group.toLowerCase();
-      }
-      if(this.item_size != 'ALL'){
-        sz = this.item_size.toLowerCase();
-      }
-      
-      filtred_group_list = this.items.filter((item) =>
-          item.item_group.toLowerCase().includes(gr) && item.size_attr.toLowerCase().includes(sz)
-        );
-
-      if (!this.search || this.search.length < 3) {
-        if (
-          this.pos_profile.posa_show_template_items &&
-          this.pos_profile.posa_hide_variants_items
-        ) {
-          return (filtred_list = filtred_group_list
-            .filter((item) => !item.variant_of)
-            .slice(0, 50));
-        } else {
-          return (filtred_list = filtred_group_list.slice(0, 50));
-        }
-      } else if (this.search) {
-        filtred_list = filtred_group_list.filter((item) => {
-          let found = false;
-          for (let element of item.item_barcode) {
-            if (element.barcode == this.search) {
-              found = true;
-              break;
-            }
-          }
-          return found;
-        });
-        if (filtred_list.length == 0) {
-          filtred_list = filtred_group_list.filter((item) =>
-            item.item_code.toLowerCase().includes(this.search.toLowerCase())
-          );
-          if (filtred_list.length == 0) {
-            filtred_list = filtred_group_list.filter((item) =>
-              item.item_name.toLowerCase().includes(this.search.toLowerCase())
-            );
-          }
-          if (
-            filtred_list.length == 0 &&
-            this.pos_profile.posa_search_serial_no
-          ) {
-            filtred_list = filtred_group_list.filter((item) => {
-              let found = false;
-              for (let element of item.serial_no_data) {
-                if (element.serial_no == this.search) {
-                  found = true;
-                  this.flags.serial_no = null;
-                  this.flags.serial_no = this.search;
-                  break;
-                }
-              }
-              return found;
-            });
-          }
-        }
-      }
-      if (
-        this.pos_profile.posa_show_template_items &&
-        this.pos_profile.posa_hide_variants_items
-      ) {
-        return filtred_list.filter((item) => !item.variant_of).slice(0, 50);
-      } else {
-        return filtred_list.slice(0, 50);
-      }
-    },
     debounce_search: {
       get() {
         return this.first_search;
