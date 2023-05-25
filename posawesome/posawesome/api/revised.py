@@ -69,6 +69,7 @@ def get_items(pos_profile, price_list=None, item_size="", item_group="", search_
                 AND i.item_code = c.parent
                 AND c.attribute like '%المقاس%'
                 {condition}
+        GROUP BY i.item_name
         ORDER BY
             i.item_name asc, c.attribute_value asc
         LIMIT 300

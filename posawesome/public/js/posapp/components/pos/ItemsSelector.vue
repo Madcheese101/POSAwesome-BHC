@@ -53,7 +53,7 @@
             hide-details
             v-model.number="qty"
             type="number"
-            @keydown.enter="get_items"
+            @keydown.enter="enter_event"
             @keydown.esc="esc_event"
           ></v-text-field>
         </v-col>
