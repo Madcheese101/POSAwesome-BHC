@@ -318,6 +318,13 @@ export default {
       return items_headers;
     },
     add_item(item) {
+      if(!item.to_set_serial_no){
+        item.serial_no_data.forEach((element)=>{
+          if(this.first_search && element.serial_no == this.first_search){
+            item.to_set_serial_no = this.first_search;
+          }
+        });
+      }
       if (item.has_variants) {
         evntBus.$emit('open_variants_model', item, this.items);
       } else {
@@ -341,6 +348,12 @@ export default {
       new_item.item_barcode.forEach((element) => {
         if (this.search == element.barcode) {
           new_item.uom = element.posa_uom;
+          match = true;
+        }
+      });
+      new_item.serial_no_data.forEach((element)=>{
+        if(this.first_search && element.serial_no == this.first_search){
+          new_item.to_set_serial_no = this.first_search;
           match = true;
         }
       });

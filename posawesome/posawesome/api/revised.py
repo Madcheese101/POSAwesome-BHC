@@ -22,6 +22,8 @@ def get_items(pos_profile, price_list=None, item_size="", item_group="", search_
     posa_display_items_in_stock =  pos_profile.get("posa_display_items_in_stock")
     search_serial_no =  pos_profile.get("posa_search_serial_no")
     posa_show_template_items = pos_profile.get("posa_show_template_items")
+    warehouse = pos_profile.get("warehouse")
+
 
     item_code = data.get("item_code") if data.get("item_code") else search_value
     serial_no = data.get("serial_no") if data.get("serial_no") else ""
@@ -67,7 +69,6 @@ def get_items(pos_profile, price_list=None, item_size="", item_group="", search_
                 AND i.is_sales_item = 1
                 AND i.is_fixed_asset = 0
                 AND i.item_code = c.parent
-                AND c.attribute like '%المقاس%'
                 {condition}
         GROUP BY i.item_name
         ORDER BY
@@ -119,12 +120,12 @@ def get_items(pos_profile, price_list=None, item_size="", item_group="", search_
             if search_serial_no:
                 serial_no_data = frappe.get_all(
                     "Serial No",
-                    filters={"item_code": item_code, "status": "Active"},
+                    filters={"item_code": item_code, "status": "Active", "warehouse": warehouse},
                     fields=["name as serial_no"],
                 )
             if posa_display_items_in_stock:
                 item_stock_qty = get_stock_availability(
-                    item_code, pos_profile.get("warehouse")
+                    item_code, warehouse
                 )
 
             if posa_show_template_items and item.has_variants:

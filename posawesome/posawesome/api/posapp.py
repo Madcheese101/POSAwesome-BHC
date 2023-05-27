@@ -120,6 +120,7 @@ def update_opening_shift_data(data, pos_profile):
 @frappe.whitelist()
 def get_items(pos_profile, price_list=None):
     pos_profile = json.loads(pos_profile)
+    warehouse = pos_profile.get("warehouse")
     if not price_list:
         price_list = pos_profile.get("selling_price_list")
     condition = ""
@@ -200,7 +201,7 @@ def get_items(pos_profile, price_list=None):
             if pos_profile.get("posa_search_serial_no"):
                 serial_no_data = frappe.get_all(
                     "Serial No",
-                    filters={"item_code": item_code, "status": "Active"},
+                    filters={"item_code": item_code, "status": "Active", "warehouse": warehouse},
                     fields=["name as serial_no"],
                 )
             if pos_profile.get("posa_display_items_in_stock"):
@@ -754,7 +755,7 @@ def get_items_details(pos_profile, items_data):
 
             serial_no_data = frappe.get_all(
                 "Serial No",
-                filters={"item_code": item_code, "status": "Active"},
+                filters={"item_code": item_code, "status": "Active", "warehouse": warehouse},
                 fields=["name as serial_no"],
             )
 
@@ -803,9 +804,8 @@ def get_item_detail(item, doc=None, warehouse=None, price_list=None):
     item = json.loads(item)
     item_code = item.get("item_code")
     if warehouse and item.get("has_batch_no") and not item.get("batch_no"):
-        item["batch_no"] = get_batch_no(
-            item_code, warehouse, item.get("qty"), False, item.get("d")
-        )
+        item["batch_no"] = (get_batch_no(item_code, warehouse, item.get("qty"), False, item.get("d")))["batch_no"]
+
     item["selling_price_list"] = price_list
     max_discount = frappe.get_value("Item", item_code, "max_discount")
     res = get_item_details(
